@@ -6,10 +6,10 @@
  * TL;DR - This is where all the tRPC server stuff is created and plugged in. The pieces you will
  * need to use are documented accordingly near the end.
  */
-import { initTRPC } from "@trpc/server";
+import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
-
+import { verifyToken } from "~/server/auth/jwt";
 import { db } from "~/server/db";
 
 /**
@@ -24,9 +24,16 @@ import { db } from "~/server/db";
  *
  * @see https://trpc.io/docs/server/context
  */
-export const createTRPCContext = async (opts: { headers: Headers }) => {
+interface CreateContextOptions {
+  headers: Headers;
+}
+
+export const createTRPCContext = async (opts: CreateContextOptions) => {
+  const { userId } = (await verifyToken()) ?? {};
+
   return {
     db,
+    userId,
     ...opts,
   };
 };
@@ -104,3 +111,26 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
  * are logged in.
  */
 export const publicProcedure = t.procedure.use(timingMiddleware);
+
+/**
+ * Protected (authenticated) procedure
+ *
+ * This is the base piece you use to build new queries and mutations that require authentication.
+ * It verifies that the user is logged in and has a valid session.
+ */
+export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
+  if (!ctx.userId) {
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: "You must be logged in to access this resource",
+    });
+  }
+
+  return next({
+    ctx: {
+      ...ctx,
+      // Infers that the userId is non-null
+      userId: ctx.userId,
+    },
+  });
+});

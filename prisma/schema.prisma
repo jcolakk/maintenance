@@ -10,11 +10,10 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
-model Post {
-    id        Int      @id @default(autoincrement())
-    name      String
+model User {
+    id        String   @id @default(cuid())
+    username  String   @unique
+    password  String // This will store the hashed password
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
-
-    @@index([name])
 }
